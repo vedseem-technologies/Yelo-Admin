@@ -74,7 +74,7 @@ function ImageUploader({ images = [], onChange, maxImages = 10 }) {
     setIsUploading(true);
 
     try {
-    
+
       const cloudinaryUrls = await uploadImagesToCloudinary(fileArray, { folder: 'products' });
 
       if (!cloudinaryUrls || cloudinaryUrls.length === 0) {
