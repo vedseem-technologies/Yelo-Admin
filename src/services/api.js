@@ -1,10 +1,8 @@
 // Use import.meta.env for Vite (instead of process.env)
 // Default to localhost for local development, can be overridden with VITE_API_URL env variable
 // For production: Set VITE_API_URL=https://yelo-backend-r5pu.onrender.com/api in .env file
-// https://yelo-backend-r5pu.onrender.com
 const API_URL = import.meta.env.VITE_API_URL || import.meta.env.REACT_APP_API_URL || 'https://yelo-backend-r5pu.onrender.com/api'
 
-// Get auth token
 const getAuthToken = () => {
   return localStorage.getItem('yelo_token')
 }
@@ -13,7 +11,7 @@ const getAuthToken = () => {
 async function apiFetch(endpoint, options = {}) {
   const url = `${API_URL}${endpoint}`
   const token = getAuthToken()
-  
+
   const config = {
     ...options,
     headers: {
@@ -22,29 +20,29 @@ async function apiFetch(endpoint, options = {}) {
       ...options.headers,
     },
   }
-  
+
   // Handle body for POST/PUT/PATCH requests
   if (options.body && typeof options.body === 'object') {
     config.body = JSON.stringify(options.body)
   } else if (options.body) {
     config.body = options.body
   }
-  
+
   const response = await fetch(url, config)
-  
+
   // Check if response has content before parsing JSON
   const contentType = response.headers.get('content-type')
   if (!contentType || !contentType.includes('application/json')) {
     const text = await response.text()
     throw new Error(text || `Server error: ${response.status} ${response.statusText}`)
   }
-  
+
   const data = await response.json()
-  
+
   if (!response.ok) {
     throw new Error(data.message || `Request failed: ${response.status}`)
   }
-  
+
   return data
 }
 

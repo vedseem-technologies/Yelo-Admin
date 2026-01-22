@@ -74,15 +74,12 @@ function ImageUploader({ images = [], onChange, maxImages = 10 }) {
     setIsUploading(true);
 
     try {
-      console.log(`📤 Uploading ${fileArray.length} images to Cloudinary...`);
-
+    
       const cloudinaryUrls = await uploadImagesToCloudinary(fileArray, { folder: 'products' });
 
       if (!cloudinaryUrls || cloudinaryUrls.length === 0) {
         throw new Error('Upload returned no results');
       }
-
-      console.log(`✅ Received ${cloudinaryUrls.length} Cloudinary URLs`);
 
       const newImages = cloudinaryUrls.map((url, index) => ({
         id: `img-${Date.now()}-${Math.random()}-${index}`,
@@ -96,9 +93,8 @@ function ImageUploader({ images = [], onChange, maxImages = 10 }) {
       const updatedList = [...imageList, ...newImages];
       handleImageChange(updatedList);
 
-      console.log(`✅ ${newImages.length} images added to list`);
     } catch (error) {
-      console.error('❌ Error uploading images:', error);
+      console.error('Error uploading images:', error);
       alert('Failed to upload images: ' + error.message);
     } finally {
       setIsUploading(false);
