@@ -1,0 +1,79 @@
+/* IconButton.css - Standardized icon button styles */
+
+.icon-btn-standard {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    color: #64748b;
+    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    min-width: 36px;
+    min-height: 36px;
+    position: relative;
+}
+
+.icon-btn-standard:hover {
+    background: #f1f5f9;
+    color: #334155;
+    transform: translateY(-1px);
+}
+
+.icon-btn-standard:active {
+    transform: translateY(0);
+}
+
+.icon-btn-standard:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.icon-btn-standard:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Danger variant for delete actions */
+.icon-btn-standard.danger {
+    color: #ef4444;
+}
+
+.icon-btn-standard.danger:hover {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+/* Disabled state */
+.icon-btn-standard:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.icon-btn-standard:disabled:hover {
+    background: transparent;
+    color: #64748b;
+}
+
+/* Material Icons styling */
+.icon-btn-standard .material-symbols-outlined {
+    font-size: 20px;
+    line-height: 1;
+    font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 20;
+}
+
+/* Hover effect on icon */
+.icon-btn-standard:hover .material-symbols-outlined {
+    font-variation-settings:
+        'FILL' 0,
+        'wght' 500,
+        'GRAD' 0,
+        'opsz' 20;
+}

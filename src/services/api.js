@@ -123,3 +123,13 @@ export const userAdminAPI = {
   login: (email, password) => apiFetch('/user-admin/login', { method: 'POST', body: { email, password } }),
 }
 
+// Campaigns API
+export const campaignsAPI = {
+  getAll: () => apiFetch('/campaigns'),
+  getById: (id) => apiFetch(`/campaigns/${id}`),
+  getBySlug: (slug) => apiFetch(`/campaigns/slug/${slug}`),
+  create: (data) => apiFetch('/campaigns', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/campaigns/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => apiFetch(`/campaigns/${id}`, { method: 'DELETE' }),
+}
+
