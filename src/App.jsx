@@ -16,6 +16,7 @@ import Notifications from './pages/Notifications';
 import DeliveryBoys from './pages/DeliveryBoys';
 import ShopsList from './pages/ShopsList';
 import CategorySync from './pages/CategorySync';
+import CampaignEventManager from './pages/CampaignEventManager';
 import Login from './pages/Login';
 import './App.css';
 import './pages/Dashboard.css';
@@ -34,7 +35,8 @@ const ALLOWED_PATHS_FOR_USER = [
   '/vendors',
   '/shops',
   '/category-sync',
-  '/discounts-coupons'
+  '/discounts-coupons',
+  '/campaign-manager'
 ];
 
 function AppContent() {
@@ -70,6 +72,7 @@ function AppContent() {
         <Route path="/delivery-boys" element={<ProtectedRoute element={<DeliveryBoys />} path="/delivery-boys" />} />
         <Route path="/shops" element={<ProtectedRoute element={<ShopsList />} path="/shops" />} />
         <Route path="/category-sync" element={<ProtectedRoute element={<CategorySync />} path="/category-sync" />} />
+        <Route path="/campaign-manager" element={<ProtectedRoute element={<CampaignEventManager />} path="/campaign-manager" />} />
         <Route path="/settings" element={<ProtectedRoute element={<Settings />} path="/settings" />} />
         
         <Route path="/" element={

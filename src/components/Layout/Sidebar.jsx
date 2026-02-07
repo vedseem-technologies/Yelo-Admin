@@ -18,7 +18,8 @@ function Sidebar({ onOpenSuperAdmin, onOpenCommission }) {
     '/vendors',
     '/shops',
     '/category-sync',
-    '/discounts-coupons'
+    '/discounts-coupons',
+    '/campaign-manager'
   ];
 
   const isAllowed = (path) => isAdmin || ALLOWED_PATHS_FOR_USER.includes(path);
@@ -111,6 +112,12 @@ function Sidebar({ onOpenSuperAdmin, onOpenCommission }) {
         </li>
         <li>
           {renderNavLink('/delivery-boys', 'icon-vendors', 'Delivery Partners')}
+        </li>
+
+        {/* Discounts & Coupons Section */}
+        <li className="sidebar-section">Campaign & Event Management</li>
+        <li>
+          {renderNavLink('/campaign-manager', 'icon-dashboard', 'Campaign / Event Manager')}
         </li>
 
         {/* Discounts & Coupons Section */}
