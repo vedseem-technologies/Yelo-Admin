@@ -58,6 +58,180 @@ const PREVIEW_MODES = [
 // --- Sub-Components ---
 // (DragDropImageUploader, ToggleSwitch, SearchableShopSelect, FontSelector, LayoutItemCard remain same)
 
+// 1. Multi-Image Uploader (Supports Drag & Drop, Gallery, Selection)
+const MultiImageUploader = ({
+  images = [],
+  onImagesChange,
+  selectedImage,
+  onSelectImage,
+  label,
+  maxImages = 5,
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) handleUpload(files);
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0)
+      handleUpload(e.target.files);
+  };
+
+  const handleUpload = async (files) => {
+    const validFiles = Array.from(files).filter(
+      (file) => file.type.startsWith("image/") && file.size <= 5 * 1024 * 1024
+    );
+
+    if (validFiles.length === 0) {
+      alert("Please upload valid image files (max 5MB).");
+      return;
+    }
+
+    if (images.length + validFiles.length > maxImages) {
+      alert(`You can only upload up to ${maxImages} images.`);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploadPromises = validFiles.map((file) =>
+        uploadImageToCloudinary(file, { folder: "campaigns/hero" })
+      );
+      const newUrls = await Promise.all(uploadPromises);
+
+      const updatedImages = [...images, ...newUrls];
+      onImagesChange(updatedImages);
+
+      // If no image is selected, auto-select the first one uploaded
+      if (!selectedImage && updatedImages.length > 0) {
+        onSelectImage(updatedImages[0]);
+      }
+    } catch (error) {
+      console.error("Upload failed", error);
+      alert("Failed to upload images.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = (index, e) => {
+    e.stopPropagation();
+    const imageToRemove = images[index];
+    const newImages = images.filter((_, i) => i !== index);
+    onImagesChange(newImages);
+
+    // If removed image was selected, select the first available or clear selection
+    if (selectedImage === imageToRemove) {
+      onSelectImage(newImages.length > 0 ? newImages[0] : "");
+    }
+  };
+
+  return (
+    <div className="form-group">
+      <label className="field-label">
+        {label} <span className="text-xs text-gray-500">({images.length}/{maxImages})</span>
+      </label>
+
+      {/* Upload Zone */}
+      {images.length < maxImages && (
+        <div
+          className={`drag-drop-zone ${isDragging ? "dragging" : ""} mb-4`}
+          style={{ height: "120px" }}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            hidden
+            multiple
+            accept="image/*"
+          />
+          {uploading ? (
+            <div className="upload-spinner">
+              <div className="spinner-circle"></div>
+              <p>Uploading...</p>
+            </div>
+          ) : (
+            <div className="upload-placeholder">
+              <span className="upload-icon">☁️</span>
+              <p className="upload-text">
+                <strong>Click to upload</strong> or drag and drop
+              </p>
+              <p className="upload-hint">Up to {maxImages} images (max 5MB each)</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Image Gallery */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-4 mt-4">
+          {images.map((img, index) => (
+            <div
+              key={index}
+              className={`relative group cursor-pointer border-2 rounded-lg overflow-hidden transition-all duration-200 ${selectedImage === img ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-200 hover:border-gray-300"
+                }`}
+              style={{ width: "120px", height: "120px" }}
+              onClick={() => onSelectImage(img)}
+            >
+              <img
+                src={img}
+                alt={`Hero ${index + 1}`}
+                className="w-full h-full object-cover"
+              />
+              {/* Selected Badge */}
+              {selectedImage === img && (
+                <div className="absolute top-1 left-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm">
+                  Selected
+                </div>
+              )}
+              {/* Remove Button */}
+              <button
+                type="button"
+                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                onClick={(e) => removeImage(index, e)}
+                title="Remove Image"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-gray-500 mt-2">
+        Click an image to select it as the main campaign banner.
+      </p>
+    </div>
+  );
+};
+
 // 1. Drag & Drop Image Uploader
 const DragDropImageUploader = ({
   value,
@@ -593,6 +767,7 @@ function CampaignEventManager() {
     heroTitle: "",
     heroSubtitle: "",
     heroBannerImage: "",
+    heroImages: [], // New state for multiple images
     heroOverlayOpacity: 0.3,
     heroTitleAlignment: "center",
     priority: 0,
@@ -657,6 +832,7 @@ function CampaignEventManager() {
       heroTitle: hero.title || "",
       heroSubtitle: hero.subtitle || "",
       heroBannerImage: hero.bannerImage || "",
+      heroImages: hero.images || [], // Load images from backend
       heroOverlayOpacity: hero.overlayOpacity ?? 0.3,
       heroTitleAlignment: hero.titleAlignment || "center",
 
@@ -710,6 +886,7 @@ function CampaignEventManager() {
           title: formData.heroTitle,
           subtitle: formData.heroSubtitle,
           bannerImage: formData.heroBannerImage,
+          images: formData.heroImages, // Save images array
           overlayOpacity: formData.heroOverlayOpacity,
           titleAlignment: formData.heroTitleAlignment,
         },
@@ -737,6 +914,7 @@ function CampaignEventManager() {
       delete payload.heroTitle;
       delete payload.heroSubtitle;
       delete payload.heroBannerImage;
+      delete payload.heroImages;
       delete payload.heroOverlayOpacity;
       delete payload.heroTitleAlignment;
       delete payload.themeColor;
@@ -1149,10 +1327,13 @@ function CampaignEventManager() {
             <div className="panel-card">
               <h3>Hero Configuration</h3>
               <div className="panel-body">
-                <DragDropImageUploader
-                  label="Hero Banner"
-                  value={formData.heroBannerImage}
-                  onChange={(url) => handleMetaChange("heroBannerImage", url)}
+                <MultiImageUploader
+                  label="Hero Images"
+                  images={formData.heroImages}
+                  onImagesChange={(images) => handleMetaChange("heroImages", images)}
+                  selectedImage={formData.heroBannerImage}
+                  onSelectImage={(url) => handleMetaChange("heroBannerImage", url)}
+                  maxImages={5}
                 />
                 <div className="form-group">
                   <label className="field-label">Main Title</label>
