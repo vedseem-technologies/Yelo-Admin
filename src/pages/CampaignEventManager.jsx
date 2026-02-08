@@ -600,31 +600,13 @@ function CampaignEventManager() {
   const fetchCampaigns = async () => {
     setLoading(true);
     try {
-      // Mock data if API fails or is empty (for dev testing)
-      // const data = await campaignsAPI.getAll();
-      // setCampaigns(Array.isArray(data) ? data : []);
-
-      // Temporary Mock for Demo
-      setCampaigns([
-        {
-          id: 1,
-          name: "Summer Sale 2026",
-          slug: "summer-sale",
-          active: true,
-          startDate: "2026-06-01",
-          endDate: "2026-06-30",
-        },
-        {
-          id: 2,
-          name: "Black Friday Design",
-          slug: "black-friday",
-          active: false,
-          startDate: "2026-11-25",
-          endDate: "2026-11-28",
-        },
-      ]);
+      const response = await campaignsAPI.getAll();
+      const list = response.data || (Array.isArray(response) ? response : []);
+      setCampaigns(list);
     } catch (err) {
       console.error("Fetch campaigns error", err);
+      // Fallback to empty list or show error
+      setCampaigns([]);
     } finally {
       setLoading(false);
     }
@@ -648,16 +630,12 @@ function CampaignEventManager() {
   };
 
   const handleEdit = (campaign) => {
-    setEditingId(campaign.id);
-    // In a real app, we might need to fetch full details if list only returns summary
-    // const fullDetails = await campaignsAPI.getById(campaign.id);
-    // setFormData(fullDetails);
-
-    // For now, using mock or passed data (assuming layout is missing in list view, using defaults)
+    setEditingId(campaign._id || campaign.id);
+    // Use existing data from list, plus merge defaults for missing fields
     setFormData({
-      ...initialFormState,
-      ...campaign,
-      layout: campaign.layout || [],
+      ...initialFormState, // Defaults
+      ...campaign, // Overwrite with campaign data
+      layout: campaign.layout || [], // Ensure layout is array
     });
     setViewMode("edit");
   };
@@ -669,10 +647,11 @@ function CampaignEventManager() {
       )
     ) {
       try {
-        // await campaignsAPI.delete(id);
-        setCampaigns((prev) => prev.filter((c) => c.id !== id));
+        await campaignsAPI.delete(id);
+        setCampaigns((prev) => prev.filter((c) => c._id !== id && c.id !== id));
         alert("Campaign deleted.");
       } catch (err) {
+        console.error("Delete error", err);
         alert("Failed to delete.");
       }
     }
@@ -680,28 +659,37 @@ function CampaignEventManager() {
 
   // --- Editor Actions ---
   const handleSave = async () => {
+    setLoading(true);
     try {
-      // if (editingId) {
-      //   await campaignsAPI.update(editingId, formData);
-      // } else {
-      //   await campaignsAPI.create(formData);
-      // }
+      let savedCampaign;
 
-      // Mock Save
       if (editingId) {
+        const response = await campaignsAPI.update(editingId, formData);
+        savedCampaign = response.data || response;
+
+        // Update local state
         setCampaigns((prev) =>
-          prev.map((c) => (c.id === editingId ? { ...c, ...formData } : c)),
+          prev.map((c) =>
+            c._id === editingId || c.id === editingId ? savedCampaign : c,
+          ),
         );
       } else {
-        setCampaigns((prev) => [...prev, { ...formData, id: Date.now() }]);
+        const response = await campaignsAPI.create(formData);
+        savedCampaign = response.data || response;
+
+        // Add to local state
+        setCampaigns((prev) => [savedCampaign, ...prev]);
       }
 
       alert("Campaign Saved Successfully!");
       setViewMode("list");
       setShowPreview(false);
+      setEditingId(null); // Clear editing ID
     } catch (err) {
       console.error("Save error", err);
-      alert("Failed to save campaign.");
+      alert(err.message || "Failed to save campaign.");
+    } finally {
+      setLoading(false);
     }
   };
 
