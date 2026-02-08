@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import AdminLayout from "../components/Layout/AdminLayout";
-import { shopsAPI, campaignsAPI } from "../services/api"; // Added campaignsAPI
+import { shopsAPI, campaignsAPI, productsAPI } from "../services/api"; // Added productsAPI
 import { uploadImageToCloudinary } from "../utils/cloudinaryUpload";
 import IconButton from "../components/UI/IconButton";
 import "./CampaignEventManager.css";
@@ -209,12 +209,11 @@ const ToggleSwitch = ({ checked, onChange, label }) => (
   </div>
 );
 
-// 3. Searchable Shop Dropdown
-const SearchableShopSelect = ({ value, onChange, options }) => {
+// 3. Searchable Product Multi-Select
+const SearchableProductSelect = ({ value = [], onChange, products = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const wrapperRef = useRef(null);
-  const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -226,18 +225,16 @@ const SearchableShopSelect = ({ value, onChange, options }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
-
-  const filteredOptions = options.filter((opt) =>
-    opt.label.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredProducts = products.filter((p) =>
+    (p.name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const selectedLabel =
-    options.find((o) => o.value === value)?.label || "Select Source Shop";
+  const toggleProduct = (productId) => {
+    const newSelection = value.includes(productId)
+      ? value.filter((id) => id !== productId)
+      : [...value, productId];
+    onChange(newSelection);
+  };
 
   return (
     <div className="searchable-select" ref={wrapperRef}>
@@ -245,39 +242,50 @@ const SearchableShopSelect = ({ value, onChange, options }) => {
         className={`select-trigger ${isOpen ? "open" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className={value ? "selected-text" : "placeholder-text"}>
-          {selectedLabel}
+        <span className={value.length ? "selected-text" : "placeholder-text"}>
+          {value.length > 0 ? `${value.length} products selected` : "Select Products"}
         </span>
         <span className="chevron">▼</span>
       </div>
       {isOpen && (
-        <div className="select-dropdown">
+        <div className="select-dropdown" style={{ maxHeight: '300px', overflowY: 'auto' }}>
           <div className="search-box">
             <input
-              ref={inputRef}
               type="text"
-              placeholder="Search shops..."
+              placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
             />
           </div>
           <div className="options-list">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((opt) => (
-                <div
-                  key={opt.value}
-                  className={`option-item ${value === opt.value ? "selected" : ""}`}
-                  onClick={() => {
-                    onChange(opt.value);
-                    setIsOpen(false);
-                    setSearchTerm("");
-                  }}
-                >
-                  {opt.label}
-                </div>
-              ))
+            {filteredProducts.length > 0 ? (
+              filteredProducts.map((product) => {
+                const pId = product._id || product.id;
+                const isSelected = value.includes(pId);
+                const imgSrc = product.images?.[0]?.url || product.image || "https://via.placeholder.com/40";
+                return (
+                  <div
+                    key={pId}
+                    className={`option-item ${isSelected ? "selected" : ""}`}
+                    onClick={() => toggleProduct(pId)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px' }}
+                  >
+                    <img
+                      src={imgSrc}
+                      alt=""
+                      style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500, fontSize: '14px' }}>{product.name}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>₹{product.price}</div>
+                    </div>
+                    {isSelected && <span style={{ color: 'var(--primary-color)' }}>✓</span>}
+                  </div>
+                );
+              })
             ) : (
-              <div className="no-results">No shops found</div>
+              <div className="no-results">No products found</div>
             )}
           </div>
         </div>
@@ -313,7 +321,7 @@ const LayoutItemCard = ({
   onUpdate,
   onRemove,
   onMove,
-  shops,
+  products = [], // Changed from shops to products
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -347,11 +355,11 @@ const LayoutItemCard = ({
             </div>
             <div className="form-row">
               <div className="form-group flex-3">
-                <label className="field-label">Source Shop</label>
-                <SearchableShopSelect
-                  value={item.shopSlug}
-                  onChange={(val) => onUpdate("shopSlug", val)}
-                  options={shops}
+                <label className="field-label">Select Products</label>
+                <SearchableProductSelect
+                  value={item.products || []}
+                  onChange={(val) => onUpdate("products", val)}
+                  products={products}
                 />
               </div>
               <div className="form-group flex-1">
@@ -566,7 +574,7 @@ const LayoutItemCard = ({
 function CampaignEventManager() {
   const [viewMode, setViewMode] = useState("list"); // 'list' or 'edit'
   const [campaigns, setCampaigns] = useState([]);
-  const [shops, setShops] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // Changed from shops to allProducts
   const [showPreview, setShowPreview] = useState(false);
   const [previewMode, setPreviewMode] = useState("mobile");
   const [loading, setLoading] = useState(false);
@@ -580,12 +588,15 @@ function CampaignEventManager() {
     endDate: "",
     themeColor: "#FF3366",
     accentColor: "#FFD700",
+    secondaryBg: "#FFF5F5",
     fontFamily: '"Inter", sans-serif',
     heroTitle: "",
     heroSubtitle: "",
     heroBannerImage: "",
     heroOverlayOpacity: 0.3,
     heroTitleAlignment: "center",
+    priority: 0,
+    tags: "",
     layout: [],
   };
   const [formData, setFormData] = useState(initialFormState);
@@ -594,7 +605,7 @@ function CampaignEventManager() {
   // Fetch Initial Data
   useEffect(() => {
     fetchCampaigns();
-    fetchShops();
+    fetchProducts();
   }, []);
 
   const fetchCampaigns = async () => {
@@ -612,13 +623,14 @@ function CampaignEventManager() {
     }
   };
 
-  const fetchShops = async () => {
+  const fetchProducts = async () => {
     try {
-      const data = await shopsAPI.getAll();
-      const list = Array.isArray(data) ? data : data.shops || data.data || [];
-      setShops(list.map((s) => ({ label: s.name, value: s.slug })));
+      const response = await productsAPI.getAll({ limit: 1000 }); // Fetch simplified list if possible, or all
+      const list = response.data || (Array.isArray(response) ? response : response.products || []);
+      console.log("Fetched Products:", list[0]); // Debug: Check first product structure
+      setAllProducts(list);
     } catch (err) {
-      console.error("Shop fetch error:", err);
+      console.error("Products fetch error:", err);
     }
   };
 
@@ -631,11 +643,38 @@ function CampaignEventManager() {
 
   const handleEdit = (campaign) => {
     setEditingId(campaign._id || campaign.id);
+
+    // Extract nested values or fallbacks
+    const hero = campaign.hero || {};
+    const theme = campaign.theme || {};
+
     // Use existing data from list, plus merge defaults for missing fields
     setFormData({
       ...initialFormState, // Defaults
       ...campaign, // Overwrite with campaign data
-      layout: campaign.layout || [], // Ensure layout is array
+
+      // Flatten Hero fields
+      heroTitle: hero.title || "",
+      heroSubtitle: hero.subtitle || "",
+      heroBannerImage: hero.bannerImage || "",
+      heroOverlayOpacity: hero.overlayOpacity ?? 0.3,
+      heroTitleAlignment: hero.titleAlignment || "center",
+
+      // Flatten Theme fields
+      themeColor: theme.themeColor || "#FF3366",
+      accentColor: theme.accentColor || "#FFD700",
+      secondaryBg: theme.secondaryBg || "#FFF5F5",
+      fontFamily: theme.fontFamily || '"Inter", sans-serif',
+
+      // Flatten other fields
+      priority: campaign.priority || 0,
+      tags: Array.isArray(campaign.tags) ? campaign.tags.join(", ") : "",
+
+      // Map layout config to flat structure for UI
+      layout: (campaign.layout || []).map(item => ({
+        ...item,
+        ...item.config // Flatten config into item
+      })),
     });
     setViewMode("edit");
   };
@@ -661,10 +700,55 @@ function CampaignEventManager() {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // transform flat state to nested structure expected by backend
+      const payload = {
+        ...formData,
+        tags: typeof formData.tags === 'string'
+          ? formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+          : formData.tags,
+        hero: {
+          title: formData.heroTitle,
+          subtitle: formData.heroSubtitle,
+          bannerImage: formData.heroBannerImage,
+          overlayOpacity: formData.heroOverlayOpacity,
+          titleAlignment: formData.heroTitleAlignment,
+        },
+        theme: {
+          themeColor: formData.themeColor,
+          accentColor: formData.accentColor,
+          secondaryBg: formData.secondaryBg,
+          fontFamily: formData.fontFamily,
+        },
+        // Re-nest layout config
+        layout: formData.layout.map(item => {
+          // Extract common config fields
+          const { id, type, ...rest } = item;
+          // You might want to filter 'rest' to only include valid config fields if strictness is needed
+          // But for now, putting everything else into config is a safe bet for the schema
+          return {
+            id,
+            type,
+            config: rest
+          };
+        })
+      };
+
+      // Remove flat fields to avoid confusion/bloat
+      delete payload.heroTitle;
+      delete payload.heroSubtitle;
+      delete payload.heroBannerImage;
+      delete payload.heroOverlayOpacity;
+      delete payload.heroTitleAlignment;
+      delete payload.themeColor;
+      delete payload.accentColor;
+      delete payload.secondaryBg;
+      delete payload.fontFamily;
+
       let savedCampaign;
 
       if (editingId) {
-        const response = await campaignsAPI.update(editingId, formData);
+        // Use PATCH for updates
+        const response = await campaignsAPI.patch(editingId, payload);
         savedCampaign = response.data || response;
 
         // Update local state
@@ -674,7 +758,7 @@ function CampaignEventManager() {
           ),
         );
       } else {
-        const response = await campaignsAPI.create(formData);
+        const response = await campaignsAPI.create(payload);
         savedCampaign = response.data || response;
 
         // Add to local state
@@ -702,13 +786,13 @@ function CampaignEventManager() {
       "product-row": {
         title: "New Collection",
         subtitle: "",
-        shopSlug: "",
+        products: [], // Changed from shopSlug to products
         limit: 10,
       },
       "product-grid": {
         title: "Trending",
         subtitle: "",
-        shopSlug: "",
+        products: [], // Changed from shopSlug to products
         limit: 20,
         cols: 4,
       },
@@ -789,18 +873,18 @@ function CampaignEventManager() {
               <div key={i} className="p-section">
                 {(item.type === "product-row" ||
                   item.type === "product-grid") && (
-                  <div className="p-prod-section">
-                    <h3 style={{ color: formData.themeColor }}>{item.title}</h3>
-                    <div
-                      className={`p-products ${item.type === "product-grid" ? "grid" : "row"}`}
-                      style={{ "--cols": item.cols }}
-                    >
-                      {[1, 2, 3, 4].map((n) => (
-                        <div key={n} className="p-card-skeleton"></div>
-                      ))}
+                    <div className="p-prod-section">
+                      <h3 style={{ color: formData.themeColor }}>{item.title}</h3>
+                      <div
+                        className={`p-products ${item.type === "product-grid" ? "grid" : "row"}`}
+                        style={{ "--cols": item.cols }}
+                      >
+                        {[1, 2, 3, 4].map((n) => (
+                          <div key={n} className="p-card-skeleton"></div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 {item.type === "banner-marquee" && (
                   <div
                     className="p-marquee"
@@ -986,6 +1070,28 @@ function CampaignEventManager() {
                     />
                   </div>
                 </div>
+                <div className="form-row">
+                  <div className="form-group flex-1">
+                    <label className="field-label">Priority</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={formData.priority}
+                      onChange={(e) => handleMetaChange("priority", parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="form-group flex-2">
+                    <label className="field-label">Tags</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={formData.tags}
+                      onChange={(e) => handleMetaChange("tags", e.target.value)}
+                      placeholder="sale, summer, urgent (comma separated)"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1021,6 +1127,19 @@ function CampaignEventManager() {
                         }
                       />
                       <span>{formData.accentColor}</span>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="field-label">Secondary Bg</label>
+                    <div className="color-picker-wrapper">
+                      <input
+                        type="color"
+                        value={formData.secondaryBg}
+                        onChange={(e) =>
+                          handleMetaChange("secondaryBg", e.target.value)
+                        }
+                      />
+                      <span>{formData.secondaryBg}</span>
                     </div>
                   </div>
                 </div>
@@ -1139,7 +1258,7 @@ function CampaignEventManager() {
                     }
                     onRemove={() => removeLayoutItem(index)}
                     onMove={(dir) => moveLayoutItem(index, dir)}
-                    shops={shops}
+                    products={allProducts} // Pass products instead of shops
                   />
                 ))
               )}
