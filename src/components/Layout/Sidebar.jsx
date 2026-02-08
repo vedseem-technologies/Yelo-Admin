@@ -78,9 +78,12 @@ function Sidebar({ onOpenSuperAdmin, onOpenCommission }) {
         </li>
 
         {/* User & Seller Management Section */}
-        <li className="sidebar-section">User & Seller Management</li>
+        <li className="sidebar-section">Users & User Admin Management</li>
         <li>
-          {renderNavLink('/user-seller-management', 'icon-users', 'User & Seller Management')}
+          {renderNavLink('/user-seller-management', 'icon-users', 'User Admin Management')}
+        </li>
+        <li>
+          {renderNavLink('/users', 'icon-users', 'Users')}
         </li>
 
         {/* Product & Category Management Section */}

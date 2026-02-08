@@ -9,6 +9,11 @@ function VendorsList() {
   const [filteredVendors, setFilteredVendors] = useState([]);
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [vendorDetails, setVendorDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -156,11 +161,29 @@ function VendorsList() {
 
   // Commission Update
   const handleCommissionChange = async (id, commission) => {
+    const commissionValue = Number(commission);
+    
+    // Validate commission value
+    if (isNaN(commissionValue) || commissionValue < 0 || commissionValue > 100) {
+      alert("Commission must be a number between 0 and 100");
+      // Refresh to reset the input
+      await fetchVendors(true);
+      return;
+    }
+
     try {
-      await vendorsAPI.updateCommission(id, commission);
-      await fetchVendors();
+      await vendorsAPI.updateCommission(id, commissionValue);
+      // Update local state immediately for better UX
+      const updatedVendors = vendors.map((v) =>
+        (v._id === id || v.id === id) ? { ...v, commission: commissionValue } : v
+      );
+      setVendors(updatedVendors);
+      setFilteredVendors(updatedVendors);
+      saveVendorsToCache(updatedVendors);
     } catch (err) {
       alert("Error updating commission: " + err.message);
+      // Refresh to reset the input on error
+      await fetchVendors(true);
     }
   };
 
@@ -184,6 +207,73 @@ function VendorsList() {
     slug: "",
     commission: 15,
   });
+
+  // Handle edit vendor
+  const handleEditVendor = (vendor) => {
+    setSelectedVendor(vendor);
+    setVendorFormData({
+      name: vendor.name || "",
+      ownerName: vendor.ownerName || vendor.owner || "",
+      email: vendor.email || "",
+      phone: vendor.phone || "",
+      address: vendor.address || "",
+      slug: vendor.slug || "",
+      commission: vendor.commission || 15,
+    });
+    setShowEditModal(true);
+  };
+
+  // Handle update vendor
+  const handleUpdateVendor = async (e) => {
+    e.preventDefault();
+    if (!selectedVendor) return;
+
+    try {
+      await vendorsAPI.update(selectedVendor._id || selectedVendor.id, vendorFormData);
+      alert("Vendor updated successfully");
+      setShowEditModal(false);
+      setSelectedVendor(null);
+      await fetchVendors(true);
+    } catch (err) {
+      alert("Error updating vendor: " + err.message);
+    }
+  };
+
+  // Handle view vendor details
+  const handleViewDetails = async (vendor) => {
+    setSelectedVendor(vendor);
+    setShowDetailsModal(true);
+    setLoadingDetails(true);
+    setVendorDetails(null);
+
+    try {
+      const response = await vendorsAPI.getDetails(vendor._id || vendor.id);
+      if (response.success) {
+        setVendorDetails(response.data);
+      } else {
+        alert("Failed to fetch vendor details");
+      }
+    } catch (err) {
+      alert("Error fetching vendor details: " + err.message);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    return `₹${Math.round(amount).toLocaleString('en-IN')}`;
+  };
+
+  // Format date
+  const formatDate = (date) => {
+    if (!date) return "N/A";
+    return new Date(date).toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
   // Helper function to generate slug from name
   const generateSlugFromName = (name) => {
@@ -414,21 +504,50 @@ function VendorsList() {
                         <div className="commission-input-wrapper">
                           <input
                             type="number"
-                            value={vendor.commission || 0}
-                            onChange={(e) =>
-                              handleCommissionChange(
-                                vendor._id || vendor.id,
-                                e.target.value,
-                              )
-                            }
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={vendor.commission !== undefined ? vendor.commission : 15}
+                            onChange={(e) => {
+                              // Allow typing, but don't save until blur
+                              const value = e.target.value;
+                              // Update local state for immediate feedback
+                              const updatedVendors = vendors.map((v) =>
+                                (v._id === vendor._id || v.id === vendor.id) 
+                                  ? { ...v, commission: value === '' ? '' : Number(value) } 
+                                  : v
+                              );
+                              setVendors(updatedVendors);
+                              setFilteredVendors(updatedVendors);
+                            }}
                             onBlur={(e) => {
-                              if (e.target.value !== (vendor.commission || 0)) {
+                              const value = e.target.value;
+                              const numValue = value === '' ? 15 : Number(value);
+                              const currentCommission = vendor.commission !== undefined ? vendor.commission : 15;
+                              
+                              if (value !== '' && numValue !== currentCommission) {
                                 handleCommissionChange(
                                   vendor._id || vendor.id,
-                                  e.target.value,
+                                  numValue,
                                 );
+                              } else if (value === '') {
+                                // Reset to current value if empty
+                                const resetVendors = vendors.map((v) =>
+                                  (v._id === vendor._id || v.id === vendor.id) 
+                                    ? { ...v, commission: currentCommission } 
+                                    : v
+                                );
+                                setVendors(resetVendors);
+                                setFilteredVendors(resetVendors);
                               }
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.target.blur();
+                              }
+                            }}
+                            placeholder="15"
+                            className="commission-input"
                           />
                           <span>%</span>
                         </div>
@@ -463,52 +582,18 @@ function VendorsList() {
                       </td>
                       <td>
                         <div className="action-buttons">
-                          {isPending ? (
-                            <>
-                              <button
-                                className="btn btn-sm btn-success"
-                                onClick={() =>
-                                  handleApprove(vendor._id || vendor.id)
-                                }
-                                disabled={loading}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                className="btn btn-sm btn-danger"
-                                onClick={() =>
-                                  handleReject(vendor._id || vendor.id)
-                                }
-                                disabled={loading}
-                              >
-                                Reject
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <IconButton
-                                icon="edit"
-                                title="Edit Vendor"
-                                onClick={() => {
-                                  // TODO: Implement edit functionality
-                                  alert("Edit functionality coming soon");
-                                }}
-                                ariaLabel={`Edit ${vendor.name}`}
-                              />
-                              <button
-                                className="icon-btn view"
-                                title="View Details"
-                                onClick={() => {
-                                  // TODO: Implement view details functionality
-                                  alert(
-                                    `Vendor: ${vendor.name}\nEmail: ${vendor.email}\nPhone: ${vendor.phone || "N/A"}\nStatus: ${vendor.status}`,
-                                  );
-                                }}
-                              >
-                                👁️
-                              </button>
-                            </>
-                          )}
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => handleViewDetails(vendor)}
+                          >
+                            Details
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={() => handleEditVendor(vendor)}
+                          >
+                            Edit
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -518,6 +603,326 @@ function VendorsList() {
             </tbody>
           </table>
         </div>
+
+        {/* Edit Vendor Modal */}
+        {showEditModal && selectedVendor && (
+          <div className="modal-overlay" onClick={() => {
+            setShowEditModal(false);
+            setSelectedVendor(null);
+          }}>
+            <div
+              className="modal-content"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "500px" }}
+            >
+              <div className="modal-header">
+                <h2>Edit Vendor</h2>
+                <button
+                  className="close-btn"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedVendor(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <form onSubmit={handleUpdateVendor}>
+                <div
+                  className="modal-body"
+                  style={{ display: "grid", gap: "15px" }}
+                >
+                  <div>
+                    <label>Vendor Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vendorFormData.name}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      placeholder="Enter vendor/brand name"
+                    />
+                  </div>
+                  <div>
+                    <label>Slug</label>
+                    <input
+                      type="text"
+                      value={vendorFormData.slug}
+                      onChange={(e) =>
+                        setVendorFormData({
+                          ...vendorFormData,
+                          slug: e.target.value,
+                        })
+                      }
+                      placeholder="Vendor slug"
+                    />
+                  </div>
+                  <div>
+                    <label>Owner Name</label>
+                    <input
+                      type="text"
+                      value={vendorFormData.ownerName}
+                      onChange={(e) =>
+                        setVendorFormData({
+                          ...vendorFormData,
+                          ownerName: e.target.value,
+                        })
+                      }
+                      placeholder="Enter owner name"
+                    />
+                  </div>
+                  <div>
+                    <label>Email *</label>
+                    <input
+                      type="email"
+                      required
+                      value={vendorFormData.email}
+                      onChange={(e) =>
+                        setVendorFormData({
+                          ...vendorFormData,
+                          email: e.target.value,
+                        })
+                      }
+                      placeholder="Enter email address"
+                    />
+                  </div>
+                  <div>
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      value={vendorFormData.phone}
+                      onChange={(e) =>
+                        setVendorFormData({
+                          ...vendorFormData,
+                          phone: e.target.value,
+                        })
+                      }
+                      placeholder="Enter phone number"
+                    />
+                  </div>
+                  <div>
+                    <label>Address</label>
+                    <textarea
+                      value={vendorFormData.address}
+                      onChange={(e) =>
+                        setVendorFormData({
+                          ...vendorFormData,
+                          address: e.target.value,
+                        })
+                      }
+                      placeholder="Enter vendor address"
+                      rows="3"
+                    />
+                  </div>
+                  <div>
+                    <label>Commission (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={vendorFormData.commission}
+                      onChange={(e) =>
+                        setVendorFormData({
+                          ...vendorFormData,
+                          commission: Number(e.target.value),
+                        })
+                      }
+                      placeholder="Commission percentage"
+                    />
+                  </div>
+                </div>
+                <div
+                  className="modal-footer"
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    justifyContent: "flex-end",
+                    marginTop: "20px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedVendor(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    Update Vendor
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Vendor Details Modal */}
+        {showDetailsModal && selectedVendor && (
+          <div className="modal-overlay" onClick={() => {
+            setShowDetailsModal(false);
+            setSelectedVendor(null);
+            setVendorDetails(null);
+          }}>
+            <div
+              className="modal-content vendor-details-modal"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}
+            >
+              <div className="modal-header">
+                <h2>Vendor Details: {selectedVendor.name}</h2>
+                <button
+                  className="close-btn"
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    setSelectedVendor(null);
+                    setVendorDetails(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="modal-body">
+                {loadingDetails ? (
+                  <div style={{ textAlign: "center", padding: "40px" }}>
+                    <p>Loading vendor details...</p>
+                  </div>
+                ) : vendorDetails ? (
+                  <>
+                    {/* Vendor Info */}
+                    <div className="details-section">
+                      <h3>Vendor Information</h3>
+                      <div className="details-grid">
+                        <div><strong>Name:</strong> {vendorDetails.vendor.name}</div>
+                        <div><strong>Email:</strong> {vendorDetails.vendor.email || "N/A"}</div>
+                        <div><strong>Phone:</strong> {vendorDetails.vendor.phone || "N/A"}</div>
+                        <div><strong>Owner:</strong> {vendorDetails.vendor.ownerName || vendorDetails.vendor.owner || "N/A"}</div>
+                        <div><strong>Status:</strong> {vendorDetails.vendor.status || "N/A"}</div>
+                        <div><strong>Commission:</strong> {vendorDetails.vendor.commission || 0}%</div>
+                      </div>
+                    </div>
+
+                    {/* Sales Statistics */}
+                    <div className="details-section">
+                      <h3>Sales Statistics</h3>
+                      <div className="stats-grid">
+                        <div className="stat-box">
+                          <div className="stat-value">{formatCurrency(vendorDetails.sales.totalSales)}</div>
+                          <div className="stat-label">Total Sales</div>
+                        </div>
+                        <div className="stat-box">
+                          <div className="stat-value">{vendorDetails.sales.totalOrders}</div>
+                          <div className="stat-label">Total Orders</div>
+                        </div>
+                        <div className="stat-box">
+                          <div className="stat-value">{vendorDetails.sales.completedOrders}</div>
+                          <div className="stat-label">Completed</div>
+                        </div>
+                        <div className="stat-box">
+                          <div className="stat-value">{vendorDetails.sales.pendingOrders}</div>
+                          <div className="stat-label">Pending</div>
+                        </div>
+                        <div className="stat-box">
+                          <div className="stat-value">{formatCurrency(vendorDetails.sales.totalCommission || 0)}</div>
+                          <div className="stat-label">Total Commission</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Products */}
+                    <div className="details-section">
+                      <h3>All Products ({vendorDetails.products.total})</h3>
+                      {vendorDetails.products.list.length > 0 ? (
+                        <div className="products-table-container">
+                          <table className="products-table">
+                            <thead>
+                              <tr>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                                <th>Category</th>
+                                <th>Subcategory</th>
+                                <th>Rating</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {vendorDetails.products.list.map((product) => (
+                                <tr key={product._id}>
+                                  <td className="product-name-cell">{product.name || "N/A"}</td>
+                                  <td>₹{product.price || 0}</td>
+                                  <td>{product.stock !== undefined ? product.stock : "N/A"}</td>
+                                  <td>
+                                    <span className={`product-status ${product.isActive !== false ? "active" : "inactive"}`}>
+                                      {product.isActive !== false ? "Active" : "Inactive"}
+                                    </span>
+                                  </td>
+                                  <td>{product.category || "N/A"}</td>
+                                  <td>{product.subcategory || "N/A"}</td>
+                                  <td>{product.rating ? `⭐ ${product.rating.toFixed(1)}` : "N/A"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p>No products found for this vendor.</p>
+                      )}
+                    </div>
+
+                    {/* Orders */}
+                    <div className="details-section">
+                      <h3>All Orders ({vendorDetails.orders.length})</h3>
+                      {vendorDetails.orders.length > 0 ? (
+                        <div className="orders-table-container">
+                          <table className="orders-table">
+                            <thead>
+                              <tr>
+                                <th>Order ID</th>
+                                <th>Amount</th>
+                                <th>Commission</th>
+                                <th>Status</th>
+                                <th>Payment</th>
+                                <th>Date</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {vendorDetails.orders.map((order) => (
+                                <tr key={order.orderId}>
+                                  <td className="order-id-cell">{order.orderId}</td>
+                                  <td>{formatCurrency(order.totalAmount)}</td>
+                                  <td className="commission-cell">{formatCurrency(order.commission || 0)}</td>
+                                  <td>
+                                    <span className={`status-badge ${order.orderStatus.toLowerCase()}`}>
+                                      {order.orderStatus}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className={`payment-status ${order.paymentStatus.toLowerCase()}`}>
+                                      {order.paymentStatus}
+                                    </span>
+                                  </td>
+                                  <td>{formatDate(order.createdAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p>No orders found for this vendor.</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "40px" }}>
+                    <p>Failed to load vendor details</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Onboard Vendor Modal */}
         {showAddModal && (

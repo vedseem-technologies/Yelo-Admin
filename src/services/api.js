@@ -83,6 +83,7 @@ export const vendorsAPI = {
   getAll: () => apiFetch('/vendors'),
   getById: (id) => apiFetch(`/vendors/${id}`),
   getBySlug: (slug) => apiFetch(`/vendors/slug/${slug}`),
+  getDetails: (id) => apiFetch(`/vendors/${id}/details`),
   create: (data) => apiFetch('/vendors', { method: 'POST', body: data }),
   update: (id, data) => apiFetch(`/vendors/${id}`, { method: 'PUT', body: data }),
   delete: (id) => apiFetch(`/vendors/${id}`, { method: 'DELETE' }),
@@ -133,3 +134,21 @@ export const campaignsAPI = {
   delete: (id) => apiFetch(`/campaigns/${id}`, { method: 'DELETE' }),
 }
 
+// Users API (Admin)
+export const usersAPI = {
+  getStats: () => apiFetch('/users/admin/stats'),
+  getList: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString()
+    return apiFetch(`/users/admin/list?${queryString}`)
+  },
+  getDetails: (id) => apiFetch(`/users/admin/${id}`),
+  delete: (id) => apiFetch(`/users/admin/${id}`, { method: 'DELETE' }),
+}
+
+// Analytics API (Admin)
+export const analyticsAPI = {
+  getAnalytics: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString()
+    return apiFetch(`/analytics?${queryString}`)
+  },
+}

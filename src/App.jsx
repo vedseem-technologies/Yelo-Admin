@@ -17,6 +17,7 @@ import DeliveryBoys from './pages/DeliveryBoys';
 import ShopsList from './pages/ShopsList';
 import CategorySync from './pages/CategorySync';
 import CampaignEventManager from './pages/CampaignEventManager';
+import Users from './pages/Users';
 import Login from './pages/Login';
 import './App.css';
 import './pages/Dashboard.css';
@@ -73,6 +74,7 @@ function AppContent() {
         <Route path="/shops" element={<ProtectedRoute element={<ShopsList />} path="/shops" />} />
         <Route path="/category-sync" element={<ProtectedRoute element={<CategorySync />} path="/category-sync" />} />
         <Route path="/campaign-manager" element={<ProtectedRoute element={<CampaignEventManager />} path="/campaign-manager" />} />
+        <Route path="/users" element={<ProtectedRoute element={<Users />} path="/users" />} />
         <Route path="/settings" element={<ProtectedRoute element={<Settings />} path="/settings" />} />
         
         <Route path="/" element={

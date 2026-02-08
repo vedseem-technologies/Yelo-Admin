@@ -22,7 +22,7 @@ function IconButton({
   className = "",
 }) {
   const iconName =
-    icon === "edit" ? "edit" : icon === "delete" ? "delete" : icon;
+    icon === "edit" ? "edit" : icon === "delete" ? "delete" : icon === "eye" ? "visibility" : icon;
   const effectiveAriaLabel = ariaLabel || title || `${icon} button`;
 
   return (
