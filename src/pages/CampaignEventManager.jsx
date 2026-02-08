@@ -198,13 +198,13 @@ const MultiImageUploader = ({
               key={index}
               className={`relative group cursor-pointer border-2 rounded-lg overflow-hidden transition-all duration-200 ${selectedImage === img ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-200 hover:border-gray-300"
                 }`}
-              style={{ width: "120px", height: "120px" }}
+              style={{ width: "10px", height: "10px" }}
               onClick={() => onSelectImage(img)}
             >
               <img
                 src={img}
                 alt={`Hero ${index + 1}`}
-                className="w-full h-full object-cover"
+                className="w-10 h-10 object-cover"
               />
               {/* Selected Badge */}
               {selectedImage === img && (
