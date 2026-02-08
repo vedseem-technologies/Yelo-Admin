@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import AdminLayout from "../components/Layout/AdminLayout";
-import { shopsAPI, campaignsAPI } from "../services/api"; // Added campaignsAPI
+import { shopsAPI, campaignsAPI, productsAPI } from "../services/api"; // Added productsAPI
 import { uploadImageToCloudinary } from "../utils/cloudinaryUpload";
 import IconButton from "../components/UI/IconButton";
 import "./CampaignEventManager.css";
@@ -57,6 +57,180 @@ const PREVIEW_MODES = [
 
 // --- Sub-Components ---
 // (DragDropImageUploader, ToggleSwitch, SearchableShopSelect, FontSelector, LayoutItemCard remain same)
+
+// 1. Multi-Image Uploader (Supports Drag & Drop, Gallery, Selection)
+const MultiImageUploader = ({
+  images = [],
+  onImagesChange,
+  selectedImage,
+  onSelectImage,
+  label,
+  maxImages = 5,
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) handleUpload(files);
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0)
+      handleUpload(e.target.files);
+  };
+
+  const handleUpload = async (files) => {
+    const validFiles = Array.from(files).filter(
+      (file) => file.type.startsWith("image/") && file.size <= 5 * 1024 * 1024
+    );
+
+    if (validFiles.length === 0) {
+      alert("Please upload valid image files (max 5MB).");
+      return;
+    }
+
+    if (images.length + validFiles.length > maxImages) {
+      alert(`You can only upload up to ${maxImages} images.`);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploadPromises = validFiles.map((file) =>
+        uploadImageToCloudinary(file, { folder: "campaigns/hero" })
+      );
+      const newUrls = await Promise.all(uploadPromises);
+
+      const updatedImages = [...images, ...newUrls];
+      onImagesChange(updatedImages);
+
+      // If no image is selected, auto-select the first one uploaded
+      if (!selectedImage && updatedImages.length > 0) {
+        onSelectImage(updatedImages[0]);
+      }
+    } catch (error) {
+      console.error("Upload failed", error);
+      alert("Failed to upload images.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = (index, e) => {
+    e.stopPropagation();
+    const imageToRemove = images[index];
+    const newImages = images.filter((_, i) => i !== index);
+    onImagesChange(newImages);
+
+    // If removed image was selected, select the first available or clear selection
+    if (selectedImage === imageToRemove) {
+      onSelectImage(newImages.length > 0 ? newImages[0] : "");
+    }
+  };
+
+  return (
+    <div className="form-group">
+      <label className="field-label">
+        {label} <span className="text-xs text-gray-500">({images.length}/{maxImages})</span>
+      </label>
+
+      {/* Upload Zone */}
+      {images.length < maxImages && (
+        <div
+          className={`drag-drop-zone ${isDragging ? "dragging" : ""} mb-4`}
+          style={{ height: "120px" }}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            hidden
+            multiple
+            accept="image/*"
+          />
+          {uploading ? (
+            <div className="upload-spinner">
+              <div className="spinner-circle"></div>
+              <p>Uploading...</p>
+            </div>
+          ) : (
+            <div className="upload-placeholder">
+              <span className="upload-icon">☁️</span>
+              <p className="upload-text">
+                <strong>Click to upload</strong> or drag and drop
+              </p>
+              <p className="upload-hint">Up to {maxImages} images (max 5MB each)</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Image Gallery */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-4 mt-4">
+          {images.map((img, index) => (
+            <div
+              key={index}
+              className={`relative group cursor-pointer border-2 rounded-lg overflow-hidden transition-all duration-200 ${selectedImage === img ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-200 hover:border-gray-300"
+                }`}
+              style={{ width: "10px", height: "10px" }}
+              onClick={() => onSelectImage(img)}
+            >
+              <img
+                src={img}
+                alt={`Hero ${index + 1}`}
+                className="w-10 h-10 object-cover"
+              />
+              {/* Selected Badge */}
+              {selectedImage === img && (
+                <div className="absolute top-1 left-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm">
+                  Selected
+                </div>
+              )}
+              {/* Remove Button */}
+              <button
+                type="button"
+                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                onClick={(e) => removeImage(index, e)}
+                title="Remove Image"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-gray-500 mt-2">
+        Click an image to select it as the main campaign banner.
+      </p>
+    </div>
+  );
+};
 
 // 1. Drag & Drop Image Uploader
 const DragDropImageUploader = ({
@@ -209,12 +383,11 @@ const ToggleSwitch = ({ checked, onChange, label }) => (
   </div>
 );
 
-// 3. Searchable Shop Dropdown
-const SearchableShopSelect = ({ value, onChange, options }) => {
+// 3. Searchable Product Multi-Select
+const SearchableProductSelect = ({ value = [], onChange, products = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const wrapperRef = useRef(null);
-  const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -226,18 +399,16 @@ const SearchableShopSelect = ({ value, onChange, options }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
-
-  const filteredOptions = options.filter((opt) =>
-    opt.label.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredProducts = products.filter((p) =>
+    (p.name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const selectedLabel =
-    options.find((o) => o.value === value)?.label || "Select Source Shop";
+  const toggleProduct = (productId) => {
+    const newSelection = value.includes(productId)
+      ? value.filter((id) => id !== productId)
+      : [...value, productId];
+    onChange(newSelection);
+  };
 
   return (
     <div className="searchable-select" ref={wrapperRef}>
@@ -245,39 +416,50 @@ const SearchableShopSelect = ({ value, onChange, options }) => {
         className={`select-trigger ${isOpen ? "open" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className={value ? "selected-text" : "placeholder-text"}>
-          {selectedLabel}
+        <span className={value.length ? "selected-text" : "placeholder-text"}>
+          {value.length > 0 ? `${value.length} products selected` : "Select Products"}
         </span>
         <span className="chevron">▼</span>
       </div>
       {isOpen && (
-        <div className="select-dropdown">
+        <div className="select-dropdown" style={{ maxHeight: '300px', overflowY: 'auto' }}>
           <div className="search-box">
             <input
-              ref={inputRef}
               type="text"
-              placeholder="Search shops..."
+              placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
             />
           </div>
           <div className="options-list">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((opt) => (
-                <div
-                  key={opt.value}
-                  className={`option-item ${value === opt.value ? "selected" : ""}`}
-                  onClick={() => {
-                    onChange(opt.value);
-                    setIsOpen(false);
-                    setSearchTerm("");
-                  }}
-                >
-                  {opt.label}
-                </div>
-              ))
+            {filteredProducts.length > 0 ? (
+              filteredProducts.map((product) => {
+                const pId = product._id || product.id;
+                const isSelected = value.includes(pId);
+                const imgSrc = product.images?.[0]?.url || product.image || "https://via.placeholder.com/40";
+                return (
+                  <div
+                    key={pId}
+                    className={`option-item ${isSelected ? "selected" : ""}`}
+                    onClick={() => toggleProduct(pId)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px' }}
+                  >
+                    <img
+                      src={imgSrc}
+                      alt=""
+                      style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500, fontSize: '14px' }}>{product.name}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>₹{product.price}</div>
+                    </div>
+                    {isSelected && <span style={{ color: 'var(--primary-color)' }}>✓</span>}
+                  </div>
+                );
+              })
             ) : (
-              <div className="no-results">No shops found</div>
+              <div className="no-results">No products found</div>
             )}
           </div>
         </div>
@@ -313,7 +495,7 @@ const LayoutItemCard = ({
   onUpdate,
   onRemove,
   onMove,
-  shops,
+  products = [], // Changed from shops to products
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -347,11 +529,11 @@ const LayoutItemCard = ({
             </div>
             <div className="form-row">
               <div className="form-group flex-3">
-                <label className="field-label">Source Shop</label>
-                <SearchableShopSelect
-                  value={item.shopSlug}
-                  onChange={(val) => onUpdate("shopSlug", val)}
-                  options={shops}
+                <label className="field-label">Select Products</label>
+                <SearchableProductSelect
+                  value={item.products || []}
+                  onChange={(val) => onUpdate("products", val)}
+                  products={products}
                 />
               </div>
               <div className="form-group flex-1">
@@ -566,7 +748,7 @@ const LayoutItemCard = ({
 function CampaignEventManager() {
   const [viewMode, setViewMode] = useState("list"); // 'list' or 'edit'
   const [campaigns, setCampaigns] = useState([]);
-  const [shops, setShops] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // Changed from shops to allProducts
   const [showPreview, setShowPreview] = useState(false);
   const [previewMode, setPreviewMode] = useState("mobile");
   const [loading, setLoading] = useState(false);
@@ -580,12 +762,16 @@ function CampaignEventManager() {
     endDate: "",
     themeColor: "#FF3366",
     accentColor: "#FFD700",
+    secondaryBg: "#FFF5F5",
     fontFamily: '"Inter", sans-serif',
     heroTitle: "",
     heroSubtitle: "",
     heroBannerImage: "",
+    heroImages: [], // New state for multiple images
     heroOverlayOpacity: 0.3,
     heroTitleAlignment: "center",
+    priority: 0,
+    tags: "",
     layout: [],
   };
   const [formData, setFormData] = useState(initialFormState);
@@ -594,7 +780,7 @@ function CampaignEventManager() {
   // Fetch Initial Data
   useEffect(() => {
     fetchCampaigns();
-    fetchShops();
+    fetchProducts();
   }, []);
 
   const fetchCampaigns = async () => {
@@ -612,13 +798,14 @@ function CampaignEventManager() {
     }
   };
 
-  const fetchShops = async () => {
+  const fetchProducts = async () => {
     try {
-      const data = await shopsAPI.getAll();
-      const list = Array.isArray(data) ? data : data.shops || data.data || [];
-      setShops(list.map((s) => ({ label: s.name, value: s.slug })));
+      const response = await productsAPI.getAll({ limit: 1000 }); // Fetch simplified list if possible, or all
+      const list = response.data || (Array.isArray(response) ? response : response.products || []);
+      console.log("Fetched Products:", list[0]); // Debug: Check first product structure
+      setAllProducts(list);
     } catch (err) {
-      console.error("Shop fetch error:", err);
+      console.error("Products fetch error:", err);
     }
   };
 
@@ -631,11 +818,39 @@ function CampaignEventManager() {
 
   const handleEdit = (campaign) => {
     setEditingId(campaign._id || campaign.id);
+
+    // Extract nested values or fallbacks
+    const hero = campaign.hero || {};
+    const theme = campaign.theme || {};
+
     // Use existing data from list, plus merge defaults for missing fields
     setFormData({
       ...initialFormState, // Defaults
       ...campaign, // Overwrite with campaign data
-      layout: campaign.layout || [], // Ensure layout is array
+
+      // Flatten Hero fields
+      heroTitle: hero.title || "",
+      heroSubtitle: hero.subtitle || "",
+      heroBannerImage: hero.bannerImage || "",
+      heroImages: hero.images || [], // Load images from backend
+      heroOverlayOpacity: hero.overlayOpacity ?? 0.3,
+      heroTitleAlignment: hero.titleAlignment || "center",
+
+      // Flatten Theme fields
+      themeColor: theme.themeColor || "#FF3366",
+      accentColor: theme.accentColor || "#FFD700",
+      secondaryBg: theme.secondaryBg || "#FFF5F5",
+      fontFamily: theme.fontFamily || '"Inter", sans-serif',
+
+      // Flatten other fields
+      priority: campaign.priority || 0,
+      tags: Array.isArray(campaign.tags) ? campaign.tags.join(", ") : "",
+
+      // Map layout config to flat structure for UI
+      layout: (campaign.layout || []).map(item => ({
+        ...item,
+        ...item.config // Flatten config into item
+      })),
     });
     setViewMode("edit");
   };
@@ -661,10 +876,57 @@ function CampaignEventManager() {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // transform flat state to nested structure expected by backend
+      const payload = {
+        ...formData,
+        tags: typeof formData.tags === 'string'
+          ? formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+          : formData.tags,
+        hero: {
+          title: formData.heroTitle,
+          subtitle: formData.heroSubtitle,
+          bannerImage: formData.heroBannerImage,
+          images: formData.heroImages, // Save images array
+          overlayOpacity: formData.heroOverlayOpacity,
+          titleAlignment: formData.heroTitleAlignment,
+        },
+        theme: {
+          themeColor: formData.themeColor,
+          accentColor: formData.accentColor,
+          secondaryBg: formData.secondaryBg,
+          fontFamily: formData.fontFamily,
+        },
+        // Re-nest layout config
+        layout: formData.layout.map(item => {
+          // Extract common config fields
+          const { id, type, ...rest } = item;
+          // You might want to filter 'rest' to only include valid config fields if strictness is needed
+          // But for now, putting everything else into config is a safe bet for the schema
+          return {
+            id,
+            type,
+            config: rest
+          };
+        })
+      };
+
+      // Remove flat fields to avoid confusion/bloat
+      delete payload.heroTitle;
+      delete payload.heroSubtitle;
+      delete payload.heroBannerImage;
+      delete payload.heroImages;
+      delete payload.heroOverlayOpacity;
+      delete payload.heroTitleAlignment;
+      delete payload.themeColor;
+      delete payload.accentColor;
+      delete payload.secondaryBg;
+      delete payload.fontFamily;
+
       let savedCampaign;
 
       if (editingId) {
-        const response = await campaignsAPI.update(editingId, formData);
+        // Use PATCH for updates
+        const response = await campaignsAPI.patch(editingId, payload);
         savedCampaign = response.data || response;
 
         // Update local state
@@ -674,7 +936,7 @@ function CampaignEventManager() {
           ),
         );
       } else {
-        const response = await campaignsAPI.create(formData);
+        const response = await campaignsAPI.create(payload);
         savedCampaign = response.data || response;
 
         // Add to local state
@@ -702,13 +964,13 @@ function CampaignEventManager() {
       "product-row": {
         title: "New Collection",
         subtitle: "",
-        shopSlug: "",
+        products: [], // Changed from shopSlug to products
         limit: 10,
       },
       "product-grid": {
         title: "Trending",
         subtitle: "",
-        shopSlug: "",
+        products: [], // Changed from shopSlug to products
         limit: 20,
         cols: 4,
       },
@@ -789,18 +1051,18 @@ function CampaignEventManager() {
               <div key={i} className="p-section">
                 {(item.type === "product-row" ||
                   item.type === "product-grid") && (
-                  <div className="p-prod-section">
-                    <h3 style={{ color: formData.themeColor }}>{item.title}</h3>
-                    <div
-                      className={`p-products ${item.type === "product-grid" ? "grid" : "row"}`}
-                      style={{ "--cols": item.cols }}
-                    >
-                      {[1, 2, 3, 4].map((n) => (
-                        <div key={n} className="p-card-skeleton"></div>
-                      ))}
+                    <div className="p-prod-section">
+                      <h3 style={{ color: formData.themeColor }}>{item.title}</h3>
+                      <div
+                        className={`p-products ${item.type === "product-grid" ? "grid" : "row"}`}
+                        style={{ "--cols": item.cols }}
+                      >
+                        {[1, 2, 3, 4].map((n) => (
+                          <div key={n} className="p-card-skeleton"></div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 {item.type === "banner-marquee" && (
                   <div
                     className="p-marquee"
@@ -986,6 +1248,28 @@ function CampaignEventManager() {
                     />
                   </div>
                 </div>
+                <div className="form-row">
+                  <div className="form-group flex-1">
+                    <label className="field-label">Priority</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={formData.priority}
+                      onChange={(e) => handleMetaChange("priority", parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="form-group flex-2">
+                    <label className="field-label">Tags</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={formData.tags}
+                      onChange={(e) => handleMetaChange("tags", e.target.value)}
+                      placeholder="sale, summer, urgent (comma separated)"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1023,6 +1307,19 @@ function CampaignEventManager() {
                       <span>{formData.accentColor}</span>
                     </div>
                   </div>
+                  <div className="form-group">
+                    <label className="field-label">Secondary Bg</label>
+                    <div className="color-picker-wrapper">
+                      <input
+                        type="color"
+                        value={formData.secondaryBg}
+                        onChange={(e) =>
+                          handleMetaChange("secondaryBg", e.target.value)
+                        }
+                      />
+                      <span>{formData.secondaryBg}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1030,10 +1327,13 @@ function CampaignEventManager() {
             <div className="panel-card">
               <h3>Hero Configuration</h3>
               <div className="panel-body">
-                <DragDropImageUploader
-                  label="Hero Banner"
-                  value={formData.heroBannerImage}
-                  onChange={(url) => handleMetaChange("heroBannerImage", url)}
+                <MultiImageUploader
+                  label="Hero Images"
+                  images={formData.heroImages}
+                  onImagesChange={(images) => handleMetaChange("heroImages", images)}
+                  selectedImage={formData.heroBannerImage}
+                  onSelectImage={(url) => handleMetaChange("heroBannerImage", url)}
+                  maxImages={5}
                 />
                 <div className="form-group">
                   <label className="field-label">Main Title</label>
@@ -1139,7 +1439,7 @@ function CampaignEventManager() {
                     }
                     onRemove={() => removeLayoutItem(index)}
                     onMove={(dir) => moveLayoutItem(index, dir)}
-                    shops={shops}
+                    products={allProducts} // Pass products instead of shops
                   />
                 ))
               )}

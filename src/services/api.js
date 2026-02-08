@@ -131,6 +131,7 @@ export const campaignsAPI = {
   getBySlug: (slug) => apiFetch(`/campaigns/slug/${slug}`),
   create: (data) => apiFetch('/campaigns', { method: 'POST', body: data }),
   update: (id, data) => apiFetch(`/campaigns/${id}`, { method: 'PUT', body: data }),
+  patch: (id, data) => apiFetch(`/campaigns/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => apiFetch(`/campaigns/${id}`, { method: 'DELETE' }),
 }
 
